@@ -1,0 +1,1259 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Level 1 — WebGL Cube Landscape</title>
+
+  <style>
+    /* GLOBAL STYLES */
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #0a1424;
+      color: #edf5ff;
+      font: 15px/1.5 system-ui, sans-serif;
+    }
+
+    /* PROJECT HEADER */
+    header {
+      padding: 20px max(20px, calc((100vw - 1100px)/2));
+      background: #132740;
+      border-bottom: 1px solid #375373;
+    }
+
+    header h1 {
+      margin: 0 0 5px;
+      font-size: clamp(1.5rem, 3vw, 2.15rem);
+    }
+
+    header p {
+      margin: 4px 0;
+      color: #c6dbf0;
+    }
+
+    /* MAIN APPLICATION LAYOUT */
+    main {
+      max-width: 1140px;
+      margin: auto;
+      padding: 18px 20px 30px;
+    }
+
+    /* GRID AND QUALITY CONTROLS */
+    .controls {
+      display: flex;
+      align-items: end;
+      flex-wrap: wrap;
+      gap: 14px 22px;
+      margin-bottom: 12px;
+    }
+
+    .control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    select, button {
+      padding: 9px 12px;
+      color: #f4f9ff;
+      background: #234665;
+      border: 1px solid #6d93b4;
+      border-radius: 8px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    select:focus-visible,
+    button:focus-visible {
+      outline: 3px solid #fbbf24;
+      outline-offset: 3px;
+    }
+
+    label { color: #d2e4f6; }
+
+    /* PART D: CAMERA TARGET SLIDERS */
+    .camera-controls {
+      margin: 2px 0 16px;
+      padding: 14px 16px;
+      border: 1px solid #466783;
+      border-radius: 10px;
+      background: #10233a;
+    }
+
+    .camera-controls h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+    }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px 20px;
+    }
+
+    .slider-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-control input {
+      width: 100%;
+      accent-color: #64c8ee;
+      cursor: pointer;
+    }
+
+    .camera-controls button {
+      margin-top: 12px;
+    }
+
+    .camera-readout {
+      font-variant-numeric: tabular-nums;
+      color: #badff5;
+    }
+
+    /* WEBGL RENDERING CANVAS */
+    canvas {
+      display: block;
+      width: 100%;
+      height: min(65vh, 640px);
+      min-height: 330px;
+      border: 1px solid #466783;
+      border-radius: 12px;
+      background: #081321;
+    }
+
+    /* PERFORMANCE AND INFORMATION TEXT */
+    #status {
+      color: #c4dcf2;
+      min-height: 1.5em;
+    }
+
+    .note {
+      color: #a9c1d9;
+      font-size: .93rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ========================================
+       HEADER: TITLE, AUTHOR, PROJECT DETAILS
+       ======================================== -->
+  <header>
+    
+    <h1>Level 1 — Procedural Cube Landscape</h1>
+
+    
+    <p><strong>Created by:</strong> Anthony</p>
+
+    <!-- PROJECT DESCRIPTION -->
+    <p>
+      <strong>About the project:</strong>
+      A height-scaled x-z cube grid with
+      interpolated vertex colors and an
+      orbiting camera with adjustable targeting.
+    </p>
+  </header>
+
+  <!-- ========================================
+       MAIN WEBGL APPLICATION
+       ======================================== -->
+  <main>
+
+    <!-- LANDSCAPE AND QUALITY CONTROLS -->
+    <div class="controls">
+
+      <div class="control">
+        <label for="resolution">
+          Grid resolution (x × z)
+        </label>
+
+        <select id="resolution">
+          <option value="12">
+            12 × 12 (144 cubes)
+          </option>
+          <option value="24" selected>
+            24 × 24 (576 cubes)
+          </option>
+          <option value="40">
+            40 × 40 (1,600 cubes)
+          </option>
+          <option value="64">
+            64 × 64 (4,096 cubes)
+          </option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label for="quality">Rendering quality</label>
+
+        <select id="quality">
+          <option value="high" selected>
+            High resolution
+          </option>
+          <option value="low">
+            Low resolution (older devices)
+          </option>
+        </select>
+      </div>
+
+      <button id="regenerate" type="button">
+        Regenerate landscape
+      </button>
+
+      <button id="pause" type="button">
+        Pause camera
+      </button>
+
+    </div>
+
+    <!-- ========================================
+         PART D: CAMERA LOOK-AT SLIDER CONTROLS
+         ======================================== -->
+    <section class="camera-controls"
+             aria-labelledby="cameraHeading">
+
+      <h2 id="cameraHeading">
+        Camera look-at target (Part D)
+      </h2>
+
+      <div class="slider-grid">
+
+        <!-- X SLIDER: LEFT AND RIGHT -->
+        <label class="slider-control" for="targetX">
+          X (left / right):
+          <output id="targetXValue" for="targetX">
+            0.0
+          </output>
+
+          <input
+            id="targetX"
+            type="range"
+            min="-30"
+            max="30"
+            step="0.5"
+            value="0">
+        </label>
+
+        <!-- Y SLIDER: DOWN AND UP -->
+        <label class="slider-control" for="targetY">
+          Y (down / up):
+          <output id="targetYValue" for="targetY">
+            0.0
+          </output>
+
+          <input
+            id="targetY"
+            type="range"
+            min="-5"
+            max="15"
+            step="0.5"
+            value="0">
+        </label>
+
+        <!-- Z SLIDER: BACK AND FORWARD -->
+        <label class="slider-control" for="targetZ">
+          Z (back / forward):
+          <output id="targetZValue" for="targetZ">
+            0.0
+          </output>
+
+          <input
+            id="targetZ"
+            type="range"
+            min="-30"
+            max="30"
+            step="0.5"
+            value="0">
+        </label>
+
+      </div>
+
+      <!-- RESTORE ORIGINAL CAMERA TARGET -->
+      <button id="resetTarget" type="button">
+        Reset look-at to (0, 0, 0)
+      </button>
+
+      <!-- CURRENT TARGET COORDINATES -->
+      <p class="camera-readout" id="targetReadout">
+        Current target: (0.0, 0.0, 0.0)
+      </p>
+
+    </section>
+
+    <!-- WEBGL RENDERING SURFACE -->
+    <canvas
+      id="scene"
+      aria-label="3D cube landscape">
+    </canvas>
+
+    <!-- PERFORMANCE DISPLAY -->
+    <p id="status" role="status">
+      Initializing WebGL...
+    </p>
+
+    <p class="note">
+      Select a grid resolution to compare performance.
+      The camera orbits the selected look-at target.
+      Move the X, Y, and Z sliders to change its focus.
+    </p>
+
+  </main>
+
+  <script>
+    "use strict";
+
+    /* ========================================
+       SECTION 1: FIND HTML ELEMENTS
+       ======================================== */
+
+    // Find the WebGL canvas.
+    const canvas =
+      document.getElementById("scene");
+
+    // Find the grid resolution selector.
+    const resolutionSelect =
+      document.getElementById("resolution");
+
+    // Find the image quality selector.
+    const qualitySelect =
+      document.getElementById("quality");
+
+    // Find the landscape regeneration button.
+    const regenerateButton =
+      document.getElementById("regenerate");
+
+    // Find the camera pause button.
+    const pauseButton =
+      document.getElementById("pause");
+
+    // Find the performance information display.
+    const status =
+      document.getElementById("status");
+
+    /* PART D: FIND CAMERA CONTROLS */
+
+    // Create an array containing the three sliders.
+    const targetInputs = ["X", "Y", "Z"].map(
+      axis => document.getElementById("target" + axis)
+    );
+
+    // Find each slider's numeric output.
+    const targetOutputs = ["X", "Y", "Z"].map(
+      axis =>
+        document.getElementById(
+          "target" + axis + "Value"
+        )
+    );
+
+    // Find the combined coordinate display.
+    const targetReadout =
+      document.getElementById("targetReadout");
+
+    // Find the reset button.
+    const resetTargetButton =
+      document.getElementById("resetTarget");
+
+    // Store the current target coordinates.
+    // Initially, the camera points at the origin.
+    const cameraTarget = [0, 0, 0];
+
+
+    /* ========================================
+       SECTION 2: INITIALIZE WEBGL
+       ======================================== */
+
+    // Request a WebGL 1 rendering context.
+    const gl =
+      canvas.getContext("webgl", {
+        antialias: true,
+        alpha: false
+      }) ||
+      canvas.getContext("experimental-webgl", {
+        antialias: true,
+        alpha: false
+      });
+
+    // Check whether WebGL is available.
+    if (!gl) {
+
+      status.textContent =
+        "WebGL is unavailable. Please use " +
+        "a compatible browser.";
+
+    } else {
+
+      try {
+
+        /* ========================================
+           SECTION 3: VERTEX AND FRAGMENT SHADERS
+           ======================================== */
+
+        // Vertex shader:
+        // Takes cube vertices, scales them vertically,
+        // translates them, and projects them through
+        // the camera matrix.
+
+        const vertexShaderSource = `
+          attribute vec3 aPosition;
+          attribute vec3 aColor;
+
+          uniform mat4 uViewProjection;
+          uniform vec3 uOffset;
+          uniform float uHeight;
+
+          varying vec3 vColor;
+
+          void main() {
+
+            // Scale in the y dimension only.
+            vec3 scaled = vec3(
+              aPosition.x,
+              aPosition.y * uHeight,
+              aPosition.z
+            );
+
+            // Move the cube into its grid position.
+            vec3 world = scaled + uOffset;
+
+            // Transform world coordinates into
+            // camera clip coordinates.
+            gl_Position =
+              uViewProjection * vec4(world, 1.0);
+
+            // Forward vertex color for interpolation.
+            vColor = aColor;
+          }
+        `;
+
+        // Fragment shader:
+        // Produces each visible pixel's color by
+        // interpolating the triangle vertex colors.
+
+        const fragmentShaderSource = `
+          precision mediump float;
+
+          varying vec3 vColor;
+
+          void main() {
+            gl_FragColor = vec4(vColor, 1.0);
+          }
+        `;
+
+
+        /* ========================================
+           SECTION 4: SHADER COMPILATION
+           ======================================== */
+
+        // Convert shader source code into a GPU shader.
+        function compile(type, source) {
+
+          const shader = gl.createShader(type);
+
+          // Supply GLSL shader source.
+          gl.shaderSource(shader, source);
+
+          // Compile shader.
+          gl.compileShader(shader);
+
+          // Detect compilation errors.
+          if (!gl.getShaderParameter(
+            shader,
+            gl.COMPILE_STATUS
+          )) {
+
+            const message =
+              gl.getShaderInfoLog(shader);
+
+            gl.deleteShader(shader);
+
+            throw new Error(message);
+          }
+
+          return shader;
+        }
+
+        // Compile vertex shader.
+        const vertexShader = compile(
+          gl.VERTEX_SHADER,
+          vertexShaderSource
+        );
+
+        // Compile fragment shader.
+        const fragmentShader = compile(
+          gl.FRAGMENT_SHADER,
+          fragmentShaderSource
+        );
+
+        // Create shader program.
+        const program = gl.createProgram();
+
+        // Attach both shaders.
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+
+        // Link shaders together.
+        gl.linkProgram(program);
+
+        // Verify linking.
+        if (!gl.getProgramParameter(
+          program,
+          gl.LINK_STATUS
+        )) {
+
+          throw new Error(
+            gl.getProgramInfoLog(program)
+          );
+        }
+
+        // Remove shader objects after linking.
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+
+        // Activate the finished shader program.
+        gl.useProgram(program);
+
+
+        /* ========================================
+           SECTION 5: BUILD SHARED CUBE GEOMETRY
+           ======================================== */
+
+        // Rather than creating thousands of separate
+        // meshes, reuse one cube for the landscape.
+
+        // Half width/depth creates a small gap.
+        const s = 0.47;
+
+        // Each face has four corners.
+        // Coordinates are in local model space.
+        const faceCorners = [
+
+          // Front face
+          [
+            [-s,-0.5, s],
+            [ s,-0.5, s],
+            [ s, 0.5, s],
+            [-s, 0.5, s]
+          ],
+
+          // Back face
+          [
+            [ s,-0.5,-s],
+            [-s,-0.5,-s],
+            [-s, 0.5,-s],
+            [ s, 0.5,-s]
+          ],
+
+          // Top face
+          [
+            [-s, 0.5, s],
+            [ s, 0.5, s],
+            [ s, 0.5,-s],
+            [-s, 0.5,-s]
+          ],
+
+          // Bottom face
+          [
+            [-s,-0.5,-s],
+            [ s,-0.5,-s],
+            [ s,-0.5, s],
+            [-s,-0.5, s]
+          ],
+
+          // Right face
+          [
+            [ s,-0.5, s],
+            [ s,-0.5,-s],
+            [ s, 0.5,-s],
+            [ s, 0.5, s]
+          ],
+
+          // Left face
+          [
+            [-s,-0.5,-s],
+            [-s,-0.5, s],
+            [-s, 0.5, s],
+            [-s, 0.5,-s]
+          ]
+        ];
+
+        // Vertex positions.
+        const positions = [];
+
+        // Vertex colors.
+        const colors = [];
+
+        // Triangle indices.
+        const indices = [];
+
+        // Different brightness for each face.
+        const faceBrightness = [
+          0.83, 0.65, 1.0,
+          0.46, 0.77, 0.70
+        ];
+
+        // Process each cube face.
+        faceCorners.forEach((face, faceIndex) => {
+
+          // Determine starting vertex index.
+          const base = positions.length / 3;
+
+          // Process every corner.
+          face.forEach((corner, cornerIndex) => {
+
+            // Store vertex XYZ position.
+            positions.push(...corner);
+
+            // Make upper vertices brighter.
+            const yShade =
+              corner[1] > 0 ? 1.0 : 0.71;
+
+            // Vary color slightly per corner.
+            const cornerShade =
+              [0.91, 0.99, 0.78, 0.87][cornerIndex];
+
+            // Calculate final brightness.
+            const shade =
+              faceBrightness[faceIndex] *
+              yShade *
+              cornerShade;
+
+            // Store RGB vertex color.
+            colors.push(
+              0.24 * shade,
+              0.84 * shade,
+              0.52 * shade
+            );
+          });
+
+          // Convert square face to two triangles.
+          indices.push(
+            base,
+            base + 1,
+            base + 2,
+            base,
+            base + 2,
+            base + 3
+          );
+        });
+
+
+        /* ========================================
+           SECTION 6: UPLOAD GEOMETRY TO GPU
+           ======================================== */
+
+        // Create and initialize a WebGL data buffer.
+        function uploadBuffer(target, data) {
+
+          const buffer = gl.createBuffer();
+
+          gl.bindBuffer(target, buffer);
+
+          gl.bufferData(
+            target,
+            data,
+            gl.STATIC_DRAW
+          );
+
+          return buffer;
+        }
+
+        // Upload vertex coordinates.
+        const positionBuffer = uploadBuffer(
+          gl.ARRAY_BUFFER,
+          new Float32Array(positions)
+        );
+
+        // Upload vertex RGB colors.
+        const colorBuffer = uploadBuffer(
+          gl.ARRAY_BUFFER,
+          new Float32Array(colors)
+        );
+
+        // Upload triangle indices.
+        const indexBuffer = uploadBuffer(
+          gl.ELEMENT_ARRAY_BUFFER,
+          new Uint16Array(indices)
+        );
+
+        // Connect a GPU buffer to a shader attribute.
+        function enableAttribute(name, buffer) {
+
+          const location =
+            gl.getAttribLocation(program, name);
+
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+
+          gl.enableVertexAttribArray(location);
+
+          // Each attribute contains three floats.
+          gl.vertexAttribPointer(
+            location,
+            3,
+            gl.FLOAT,
+            false,
+            0,
+            0
+          );
+        }
+
+        // Connect positions and colors.
+        enableAttribute("aPosition", positionBuffer);
+        enableAttribute("aColor", colorBuffer);
+
+        // Bind index buffer.
+        gl.bindBuffer(
+          gl.ELEMENT_ARRAY_BUFFER,
+          indexBuffer
+        );
+
+        // Get transformation uniform locations.
+        const viewProjectionLocation =
+          gl.getUniformLocation(
+            program,
+            "uViewProjection"
+          );
+
+        const offsetLocation =
+          gl.getUniformLocation(
+            program,
+            "uOffset"
+          );
+
+        const heightLocation =
+          gl.getUniformLocation(
+            program,
+            "uHeight"
+          );
+
+
+        /* ========================================
+           SECTION 7: PROCEDURAL LANDSCAPE
+           PARTS A AND B: TRANSLATION + SCALING
+           ======================================== */
+
+        // Store all cube instances.
+        let cubes = [];
+
+        // Seed controls variation.
+        let seed = 1;
+
+        // Get initial grid size.
+        let gridSize = Number(
+          resolutionSelect.value
+        );
+
+        // Calculate a procedural height at x,z.
+        function heightAt(x, z, variant) {
+
+          // First rounded hill.
+          const hill1 = 4.2 * Math.exp(
+            -(
+              (x + 5) * (x + 5) +
+              (z - 3) * (z - 3)
+            ) / 105
+          );
+
+          // Second rounded hill.
+          const hill2 = 3.0 * Math.exp(
+            -(
+              (x - 6) * (x - 6) +
+              (z + 5) * (z + 5)
+            ) / 70
+          );
+
+          // Smooth ripples across terrain.
+          const waves =
+            0.65 *
+            Math.sin(x * 0.38 + variant) *
+            Math.cos(z * 0.30 - variant);
+
+          // Ensure each cube has positive height.
+          return Math.max(
+            0.24,
+            0.5 + hill1 + hill2 + waves
+          );
+        }
+
+        // Build N by N cube positions.
+        function generateLandscape() {
+
+          gridSize = Number(
+            resolutionSelect.value
+          );
+
+          // Clear old landscape.
+          cubes = [];
+
+          // Center the grid around the origin.
+          const center = (gridSize - 1) / 2;
+
+          // Loop over z rows.
+          for (let z = 0; z < gridSize; z++) {
+
+            // Loop over x columns.
+            for (let x = 0; x < gridSize; x++) {
+
+              // Translate grid indices to world space.
+              const worldX = x - center;
+              const worldZ = z - center;
+
+              // Calculate the cube's y scale.
+              const height = heightAt(
+                worldX,
+                worldZ,
+                seed * 0.71
+              );
+
+              // Add one cube instance.
+              // Its bottom rests at y = -0.8.
+              cubes.push({
+                x: worldX,
+                y: height * 0.5 - 0.8,
+                z: worldZ,
+                height: height
+              });
+            }
+          }
+        }
+
+        // Generate initial landscape.
+        generateLandscape();
+
+        // Rebuild when resolution changes.
+        resolutionSelect.addEventListener(
+          "change",
+          generateLandscape
+        );
+
+        // Regenerate different terrain.
+        regenerateButton.addEventListener(
+          "click",
+          () => {
+            seed += 1;
+            generateLandscape();
+          }
+        );
+
+
+        /* ========================================
+           SECTION 8: CAMERA MATRIX MATHEMATICS
+           ======================================== */
+
+        // Multiply two 4x4 matrices.
+        function multiply(a, b) {
+
+          const out = new Float32Array(16);
+
+          for (let c = 0; c < 4; c++) {
+            for (let r = 0; r < 4; r++) {
+              for (let k = 0; k < 4; k++) {
+
+                out[c * 4 + r] +=
+                  a[k * 4 + r] *
+                  b[c * 4 + k];
+
+              }
+            }
+          }
+
+          return out;
+        }
+
+        // Create perspective projection matrix.
+        function perspective(fov, aspect, near, far) {
+
+          const f = 1 / Math.tan(fov / 2);
+
+          return new Float32Array([
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (far + near) / (near - far), -1,
+            0, 0, (2 * far * near) / (near - far), 0
+          ]);
+        }
+
+        // Normalize a vector to unit length.
+        function normalize(v) {
+
+          const length =
+            Math.hypot(v[0], v[1], v[2]) || 1;
+
+          return [
+            v[0] / length,
+            v[1] / length,
+            v[2] / length
+          ];
+        }
+
+        // Calculate cross product.
+        function cross(a, b) {
+
+          return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]
+          ];
+        }
+
+        // Calculate dot product.
+        function dot(a, b) {
+
+          return (
+            a[0] * b[0] +
+            a[1] * b[1] +
+            a[2] * b[2]
+          );
+        }
+
+        // Create a view matrix pointing toward target.
+        function lookAt(eye, target, up) {
+
+          // Camera backward direction.
+          const forward = normalize([
+            eye[0] - target[0],
+            eye[1] - target[1],
+            eye[2] - target[2]
+          ]);
+
+          // Camera right direction.
+          const right = normalize(
+            cross(up, forward)
+          );
+
+          // Corrected up direction.
+          const actualUp =
+            cross(forward, right);
+
+          // Return view transformation matrix.
+          return new Float32Array([
+            right[0], actualUp[0], forward[0], 0,
+            right[1], actualUp[1], forward[1], 0,
+            right[2], actualUp[2], forward[2], 0,
+            -dot(right, eye),
+            -dot(actualUp, eye),
+            -dot(forward, eye),
+            1
+          ]);
+        }
+
+
+        /* ========================================
+           SECTION 9: PART D — CAMERA TARGET SLIDERS
+           ======================================== */
+
+        // This function reads the slider values and
+        // updates the camera's look-at coordinates.
+        function updateCameraTarget() {
+
+          // Loop over x, y, and z.
+          for (let axis = 0; axis < 3; axis++) {
+
+            // Convert the current slider value
+            // into a JavaScript number.
+            cameraTarget[axis] = Number(
+              targetInputs[axis].value
+            );
+
+            // Display coordinate beside slider.
+            targetOutputs[axis].textContent =
+              cameraTarget[axis].toFixed(1);
+          }
+
+          // Display complete look-at vector.
+          targetReadout.textContent =
+            `Current target: (${
+              cameraTarget
+                .map(value => value.toFixed(1))
+                .join(", ")
+            })`;
+        }
+
+        // Update camera target whenever a slider moves.
+        targetInputs.forEach(input => {
+
+          input.addEventListener(
+            "input",
+            updateCameraTarget
+          );
+        });
+
+        // Restore look-at target to origin.
+        resetTargetButton.addEventListener(
+          "click",
+          () => {
+
+            // Reset all slider values.
+            targetInputs.forEach(input => {
+              input.value = "0";
+            });
+
+            // Update stored target coordinates.
+            updateCameraTarget();
+          }
+        );
+
+        // Set initial slider readouts.
+        updateCameraTarget();
+
+
+        /* ========================================
+           SECTION 10: CAMERA ANIMATION VARIABLES
+           ======================================== */
+
+        // Current camera orbit angle.
+        let angle = 0;
+
+        // Camera pause state.
+        let paused = false;
+
+        // Previous animation frame timestamp.
+        let lastFrame = 0;
+
+        // FPS measurement start time.
+        let fpsStart = 0;
+
+        // Frames counted during FPS measurement.
+        let frameCount = 0;
+
+        // Calculated FPS.
+        let measuredFps = 0;
+
+        // Toggle camera movement.
+        pauseButton.addEventListener(
+          "click",
+          () => {
+
+            paused = !paused;
+
+            pauseButton.textContent = paused
+              ? "Resume camera"
+              : "Pause camera";
+          }
+        );
+
+
+        /* ========================================
+           SECTION 11: WEBGL RENDERING SETTINGS
+           ======================================== */
+
+        // Enable depth testing for correct occlusion.
+        gl.enable(gl.DEPTH_TEST);
+
+        // Avoid rendering back-facing triangles.
+        gl.enable(gl.CULL_FACE);
+
+        // Define front-facing vertex winding.
+        gl.frontFace(gl.CCW);
+
+        // Set scene background color.
+        gl.clearColor(
+          0.035,
+          0.075,
+          0.12,
+          1.0
+        );
+
+
+        /* ========================================
+           SECTION 12: ANIMATED RENDERING LOOP
+           ======================================== */
+
+        function render(timestamp) {
+
+          // Calculate elapsed frame time in seconds.
+          const dt = Math.min(
+            (timestamp - (lastFrame || timestamp)) / 1000,
+            0.05
+          );
+
+          // Remember current timestamp.
+          lastFrame = timestamp;
+
+          // Rotate the camera unless paused.
+          if (!paused) {
+            angle += dt * 0.22;
+          }
+
+          // Select high or low drawing resolution.
+          const pixelRatio =
+            qualitySelect.value === "high"
+              ? Math.min(window.devicePixelRatio || 1, 2)
+              : 0.65;
+
+          // Calculate drawing buffer dimensions.
+          const w = Math.max(
+            1,
+            Math.floor(
+              canvas.clientWidth * pixelRatio
+            )
+          );
+
+          const h = Math.max(
+            1,
+            Math.floor(
+              canvas.clientHeight * pixelRatio
+            )
+          );
+
+          // Resize only if necessary.
+          if (
+            canvas.width !== w ||
+            canvas.height !== h
+          ) {
+
+            canvas.width = w;
+            canvas.height = h;
+          }
+
+          // Set viewport to the canvas dimensions.
+          gl.viewport(0, 0, w, h);
+
+          // Clear color and depth buffers.
+          gl.clear(
+            gl.COLOR_BUFFER_BIT |
+            gl.DEPTH_BUFFER_BIT
+          );
+
+          /* ========================================
+             PART D: POSITION THE ORBITING CAMERA
+             ======================================== */
+
+          // Orbit radius increases for larger grids.
+          const radius = gridSize * 1.18 + 10;
+
+          // Calculate camera position relative
+          // to the current slider-selected target.
+          //
+          // X changes horizontally with cosine.
+          // Y stays elevated above the target.
+          // Z changes horizontally with sine.
+          //
+          // This causes the camera to orbit around
+          // the user-selected point.
+
+          const eye = [
+
+            cameraTarget[0] +
+              Math.cos(angle) * radius,
+
+            cameraTarget[1] +
+              gridSize * 0.60 + 8,
+
+            cameraTarget[2] +
+              Math.sin(angle) * radius
+
+          ];
+
+          // Construct the camera view matrix.
+          // The second argument is controlled by
+          // the X, Y, and Z sliders.
+          const view = lookAt(
+            eye,
+            cameraTarget,
+            [0, 1, 0]
+          );
+
+          // Create the perspective projection.
+          const projection = perspective(
+            Math.PI / 3,
+            w / h,
+            0.1,
+            radius * 5
+          );
+
+          // Combine perspective and camera transforms.
+          const viewProjection = multiply(
+            projection,
+            view
+          );
+
+          // Send matrix to the vertex shader.
+          gl.uniformMatrix4fv(
+            viewProjectionLocation,
+            false,
+            viewProjection
+          );
+
+          /* ========================================
+             DRAW EVERY CUBE IN THE LANDSCAPE
+             ======================================== */
+
+          for (const cube of cubes) {
+
+            // Translate cube into grid position.
+            gl.uniform3f(
+              offsetLocation,
+              cube.x,
+              cube.y,
+              cube.z
+            );
+
+            // Scale cube vertically.
+            gl.uniform1f(
+              heightLocation,
+              cube.height
+            );
+
+            // Draw the shared cube geometry.
+            gl.drawElements(
+              gl.TRIANGLES,
+              indices.length,
+              gl.UNSIGNED_SHORT,
+              0
+            );
+          }
+
+          /* ========================================
+             FPS PERFORMANCE MEASUREMENT
+             ======================================== */
+
+          // Count each rendered frame.
+          frameCount++;
+
+          // Update measured FPS periodically.
+          if (timestamp - fpsStart >= 750) {
+
+            measuredFps = Math.round(
+              frameCount * 1000 /
+              Math.max(1, timestamp - fpsStart)
+            );
+
+            // Reset FPS counters.
+            frameCount = 0;
+            fpsStart = timestamp;
+
+            // Display current performance.
+            status.textContent =
+              `${gridSize} x ${gridSize} = ` +
+              `${cubes.length.toLocaleString()} cubes | ` +
+              `${measuredFps} FPS | ` +
+              `${qualitySelect.value} quality`;
+          }
+
+          // Request the next rendered frame.
+          requestAnimationFrame(render);
+        }
+
+        // Start WebGL animation.
+        requestAnimationFrame(render);
+
+      } catch (error) {
+
+        // Report setup errors.
+        console.error(error);
+
+        status.textContent =
+          "WebGL setup failed: " + error.message;
+      }
+    }
+  </script>
+
+</body>
+</html>
